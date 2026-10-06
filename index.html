@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GPT Token Inference Simulator</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121a31;
+      --panel2:#0f1730;
+      --line:#273356;
+      --text:#eef3ff;
+      --muted:#9eabd0;
+      --prompt:#5ea0ff;
+      --generated:#8f7cff;
+      --q:#ffcf5a;
+      --k:#58d3b4;
+      --v:#ff8f8f;
+      --accent:#62e6ff;
+      --good:#6be7a7;
+      --warn:#ffbd66;
+      --shadow:0 18px 60px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      background:
+        radial-gradient(900px 550px at 10% -10%, rgba(94,160,255,.18), transparent 60%),
+        radial-gradient(800px 500px at 100% 0%, rgba(143,124,255,.16), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font-family:Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height:1.55;
+    }
+    button,input{font:inherit}
+    .wrap{max-width:1240px;margin:0 auto;padding:32px 20px 56px}
+    .hero{
+      display:grid;
+      grid-template-columns:1.25fr .75fr;
+      gap:20px;
+      align-items:stretch;
+      margin-bottom:20px;
+    }
+    .card{
+      background:linear-gradient(180deg,rgba(18,26,49,.95),rgba(15,23,48,.92));
+      border:1px solid var(--line);
+      border-radius:22px;
+      box-shadow:var(--shadow);
+    }
+    .hero-main{padding:28px}
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:8px;
+      font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--accent);background:rgba(98,230,255,.08);
+      border:1px solid rgba(98,230,255,.18);
+      border-radius:999px;padding:7px 10px;
+    }
+    h1{font-size:clamp(32px,5vw,58px);line-height:1.06;margin:14px 0 12px}
+    .lead{font-size:18px;color:#d6def6;max-width:780px;margin:0}
+    .hero-side{padding:22px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+    .mini{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.025);
+      padding:14px 15px;border-radius:16px;
+    }
+    .mini b{display:block;margin-bottom:4px}
+    .mini span{color:var(--muted);font-size:14px}
+    .controls{padding:20px;margin-bottom:20px}
+    .controls-grid{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:end}
+    label{display:block;font-size:13px;color:var(--muted);font-weight:700;margin-bottom:7px}
+    input{
+      width:100%;border:1px solid var(--line);background:#0b1329;color:var(--text);
+      border-radius:14px;padding:13px 14px;outline:none;
+    }
+    input:focus{border-color:var(--prompt);box-shadow:0 0 0 3px rgba(94,160,255,.12)}
+    .buttons{display:flex;gap:8px;flex-wrap:wrap}
+    button{
+      border:1px solid var(--line);background:#182443;color:var(--text);
+      padding:11px 14px;border-radius:13px;font-weight:800;cursor:pointer;transition:.2s;
+    }
+    button:hover{transform:translateY(-1px);border-color:#4c5f94}
+    button.primary{background:linear-gradient(135deg,#427cff,#7258ff);border-color:transparent}
+    button.ghost{background:transparent}
+    button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+    .status{
+      margin-top:14px;padding:13px 15px;border-radius:14px;background:rgba(98,230,255,.07);
+      border:1px solid rgba(98,230,255,.16);color:#dffaff;
+    }
+    .sim-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:20px}
+    .section{padding:22px}
+    h2{font-size:20px;margin:0 0 14px}
+    .sub{font-size:13px;color:var(--muted);margin-top:-8px;margin-bottom:16px}
+    .token-lane{
+      min-height:124px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+      padding:18px;border-radius:18px;background:#0b1329;border:1px dashed #35436e;
+    }
+    .token{
+      position:relative;padding:11px 13px;border-radius:12px;border:1px solid;
+      font-weight:800;min-width:44px;text-align:center;transition:.25s;
+    }
+    .token.prompt{border-color:rgba(94,160,255,.5);background:rgba(94,160,255,.1);color:#ddecff}
+    .token.generated{border-color:rgba(143,124,255,.5);background:rgba(143,124,255,.11);color:#ece8ff}
+    .token.current{box-shadow:0 0 0 3px rgba(255,207,90,.16);border-color:var(--q)!important}
+    .token.next{
+      border-style:dashed;border-color:rgba(107,231,167,.55);background:rgba(107,231,167,.07);color:#c9f9df
+    }
+    .tag{
+      position:absolute;left:50%;transform:translateX(-50%);top:-22px;
+      font-size:10px;color:var(--q);white-space:nowrap;font-weight:900
+    }
+    .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:12px}
+    .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+    .flow{
+      margin-top:18px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:center
+    }
+    .flow-box{
+      min-height:86px;border:1px solid var(--line);border-radius:15px;padding:12px;
+      background:rgba(255,255,255,.025);text-align:center;
+    }
+    .flow-box strong{display:block;font-size:14px;margin-bottom:5px}
+    .flow-box span{font-size:12px;color:var(--muted)}
+    .arrow{text-align:center;color:#7283b7;font-size:22px}
+    .qbox{border-color:rgba(255,207,90,.35);background:rgba(255,207,90,.06)}
+    .kbox{border-color:rgba(88,211,180,.35);background:rgba(88,211,180,.06)}
+    .vbox{border-color:rgba(255,143,143,.35);background:rgba(255,143,143,.06)}
+    .cache{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .cache-col{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#0b1329}
+    .cache-head{padding:11px 12px;font-weight:900;border-bottom:1px solid var(--line)}
+    .cache-head.k{color:var(--k)} .cache-head.v{color:var(--v)}
+    .cache-list{max-height:350px;overflow:auto;padding:8px}
+    .cache-row{
+      display:flex;justify-content:space-between;align-items:center;gap:8px;
+      padding:8px 9px;margin:5px 0;border-radius:10px;background:rgba(255,255,255,.025);
+      border:1px solid transparent;font-size:12px
+    }
+    .cache-row.current{border-color:rgba(255,207,90,.45);background:rgba(255,207,90,.06)}
+    .cache-row small{color:var(--muted)}
+    .attn{margin-top:18px}
+    .bars{display:flex;flex-direction:column;gap:8px}
+    .bar-row{display:grid;grid-template-columns:110px 1fr 48px;gap:10px;align-items:center;font-size:12px}
+    .bar-bg{height:12px;background:#0b1329;border-radius:999px;overflow:hidden;border:1px solid #263356}
+    .bar-fill{height:100%;background:linear-gradient(90deg,#4f84ff,#8d6bff);border-radius:999px;transition:.35s}
+    .prediction{
+      margin-top:18px;padding:18px;border-radius:18px;
+      background:linear-gradient(135deg,rgba(107,231,167,.11),rgba(98,230,255,.06));
+      border:1px solid rgba(107,231,167,.22)
+    }
+    .prediction .big{font-size:30px;font-weight:950;letter-spacing:-.03em}
+    .prediction .caption{color:var(--muted);font-size:13px}
+    .explain{margin-top:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .explain .item{padding:18px}
+    .num{
+      width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
+      font-weight:950;background:#1c2a50;margin-bottom:10px
+    }
+    .item h3{margin:0 0 7px;font-size:16px}
+    .item p{margin:0;color:var(--muted);font-size:14px}
+    details{margin-top:20px}
+    summary{cursor:pointer;font-weight:900}
+    .note{
+      margin-top:10px;padding:16px;border-radius:14px;background:#0b1329;border:1px solid var(--line);
+      color:#d9e2fb;font-size:14px
+    }
+    .formula{
+      font-family:"SFMono-Regular",Consolas,monospace;
+      background:#091022;border:1px solid var(--line);border-radius:12px;padding:12px;overflow:auto;
+      color:#dfe7ff;margin-top:10px
+    }
+    .footer{margin-top:26px;color:#7f8db8;font-size:12px;text-align:center}
+    @media (max-width:900px){
+      .hero,.sim-grid,.explain{grid-template-columns:1fr}
+      .controls-grid{grid-template-columns:1fr}
+      .flow{grid-template-columns:1fr}
+      .arrow{transform:rotate(90deg)}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="card hero-main">
+      <div class="eyebrow">Interactive GPT Inference</div>
+      <h1>GPT는 다음 토큰을<br>어떻게 고를까?</h1>
+      <p class="lead">Q는 <b>지금 막 처리 중인 마지막 위치</b>에서 만들고, 과거 토큰의 K/V는 <b>KV Cache</b>에 저장해 다시 계산하지 않습니다. 아래에서 한 토큰씩 직접 진행해 보세요.</p>
+    </div>
+    <div class="card hero-side">
+      <div class="mini"><b>Q = 지금 묻는 질문</b><span>현재 토큰의 hidden state를 Q로 projection</span></div>
+      <div class="mini"><b>K = 찾아보기 위한 표지</b><span>각 과거 토큰이 “나는 이런 정보야”라고 붙인 키</span></div>
+      <div class="mini"><b>V = 실제 가져올 내용</b><span>Q와 K의 유사도로 가중합되는 정보</span></div>
+    </div>
+  </section>
+
+  <section class="card controls">
+    <div class="controls-grid">
+      <div>
+        <label for="promptInput">Prompt</label>
+        <input id="promptInput" value="나는 오늘 인도 음식점에 갔다" />
+      </div>
+      <div class="buttons">
+        <button id="resetBtn" class="ghost">↺ 처음부터</button>
+        <button id="prevBtn">← 이전</button>
+        <button id="nextBtn" class="primary">다음 토큰 →</button>
+        <button id="autoBtn">▶ 자동 재생</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="sim-grid">
+    <div class="card section">
+      <h2>1. 지금 Context</h2>
+      <div class="sub">파랑 = prompt, 보라 = 이미 생성된 token, 노랑 테두리 = 현재 Q를 만드는 위치</div>
+      <div class="token-lane" id="tokenLane"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--prompt)"></i>Prompt</span>
+        <span><i class="dot" style="background:var(--generated)"></i>Generated</span>
+        <span><i class="dot" style="background:var(--q)"></i>Current Q position</span>
+        <span><i class="dot" style="background:var(--good)"></i>Next prediction</span>
+      </div>
+
+      <div class="flow">
+        <div class="flow-box">
+          <strong>현재 마지막 위치</strong>
+          <span id="currentTokenLabel">-</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="flow-box qbox">
+          <strong style="color:var(--q)">Q</strong>
+          <span>“지금 다음에 뭐가 올까?”</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="flow-box">
+          <strong>Attention</strong>
+          <span>Q가 모든 K를 보고 V를 섞음</span>
+        </div>
+      </div>
+
+      <div class="prediction">
+        <div class="caption">이번 step이 예측하는 다음 token</div>
+        <div class="big" id="predictionToken">-</div>
+        <div class="caption" id="predictionDetail"></div>
+      </div>
+
+      <div class="attn">
+        <h2 style="margin-top:6px">2. Attention Weight 예시</h2>
+        <div class="sub">실제 모델 값이 아니라 구조를 이해하기 위한 시각화입니다.</div>
+        <div class="bars" id="attnBars"></div>
+      </div>
+    </div>
+
+    <div class="card section">
+      <h2>3. KV Cache</h2>
+      <div class="sub">과거 토큰의 K/V는 저장됩니다. 이전 Q는 다시 쓰지 않으므로 저장할 필요가 없습니다.</div>
+      <div class="cache">
+        <div class="cache-col">
+          <div class="cache-head k">K Cache</div>
+          <div class="cache-list" id="kCache"></div>
+        </div>
+        <div class="cache-col">
+          <div class="cache-head v">V Cache</div>
+          <div class="cache-list" id="vCache"></div>
+        </div>
+      </div>
+
+      <details open>
+        <summary>왜 Q Cache는 없을까?</summary>
+        <div class="note">
+          token 1의 Q는 token 1을 처리할 때만 필요합니다. 다음 step에서는 새로운 마지막 token에서 새로운 Q를 만들면 됩니다.
+          반대로 K/V는 미래의 모든 token이 계속 참고해야 하므로 cache합니다.
+        </div>
+      </details>
+
+      <details>
+        <summary>정확히는 첫 번째 생성 token에서 조금 다릅니다</summary>
+        <div class="note">
+          <b>Prefill</b> 단계에서 prompt 전체를 한 번에 계산합니다. 이때 prompt의 모든 K/V가 cache되고,
+          마지막 prompt 위치의 출력으로 바로 첫 generated token을 예측할 수 있습니다.
+          그 다음부터는 새로 생성된 token 하나만 입력해 Q/K/V를 만들고, K/V를 cache에 하나씩 추가합니다.
+        </div>
+      </details>
+
+      <div class="formula">
+Attention(Q,K,V) = softmax(QKᵀ / √d) · V
+      </div>
+    </div>
+  </section>
+
+  <section class="explain">
+    <div class="card item">
+      <div class="num">1</div>
+      <h3>Prompt Prefill</h3>
+      <p>Prompt 전체를 한꺼번에 읽습니다. 각 위치의 K/V를 만들고 KV Cache에 저장합니다.</p>
+    </div>
+    <div class="card item">
+      <div class="num">2</div>
+      <h3>다음 token 예측</h3>
+      <p>마지막 위치의 표현으로 logits를 만들고, 다음 token 하나를 선택합니다.</p>
+    </div>
+    <div class="card item">
+      <div class="num">3</div>
+      <h3>Decode 반복</h3>
+      <p>방금 생성한 token 하나만 새로 계산합니다. 새 K/V는 cache에 추가하고, 새 Q로 다음 token을 또 예측합니다.</p>
+    </div>
+  </section>
+
+  <div class="footer">Pure HTML/CSS/JavaScript · GitHub Pages에 index.html 하나만 올리면 실행됩니다.</div>
+</div>
+
+<script>
+  const demoGenerated = ["그리고","커리를","정말","맛있게","먹었다","."];
+
+  const els = {
+    promptInput: document.getElementById("promptInput"),
+    resetBtn: document.getElementById("resetBtn"),
+    prevBtn: document.getElementById("prevBtn"),
+    nextBtn: document.getElementById("nextBtn"),
+    autoBtn: document.getElementById("autoBtn"),
+    status: document.getElementById("status"),
+    lane: document.getElementById("tokenLane"),
+    currentLabel: document.getElementById("currentTokenLabel"),
+    prediction: document.getElementById("predictionToken"),
+    predictionDetail: document.getElementById("predictionDetail"),
+    kCache: document.getElementById("kCache"),
+    vCache: document.getElementById("vCache"),
+    bars: document.getElementById("attnBars")
+  };
+
+  let step = 0;
+  let timer = null;
+
+  function tokenize(text){
+    const t = text.trim();
+    if(!t) return [];
+    return t.split(/\s+/);
+  }
+
+  function hash(s){
+    let h = 2166136261;
+    for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619); }
+    return Math.abs(h >>> 0);
+  }
+
+  function attentionWeights(tokens, currentIndex){
+    if(tokens.length===0) return [];
+    const raw = tokens.map((tok,i)=>{
+      const recency = 0.8 + (i+1)/tokens.length * 1.6;
+      const lexical = 0.7 + (hash(tok + "|" + currentIndex) % 100)/100;
+      const self = i===currentIndex ? 1.35 : 1;
+      return recency * lexical * self;
+    });
+    const sum = raw.reduce((a,b)=>a+b,0);
+    return raw.map(v=>v/sum);
+  }
+
+  function render(){
+    const prompt = tokenize(els.promptInput.value);
+    if(prompt.length===0){
+      els.status.textContent = "Prompt를 입력해 주세요.";
+      els.lane.innerHTML = "";
+      els.kCache.innerHTML = "";
+      els.vCache.innerHTML = "";
+      els.bars.innerHTML = "";
+      return;
+    }
+
+    const generatedSoFar = demoGenerated.slice(0, step);
+    const context = [...prompt, ...generatedSoFar];
+    const currentIndex = context.length - 1;
+    const nextToken = step < demoGenerated.length ? demoGenerated[step] : "〈완료〉";
+
+    els.lane.innerHTML = "";
+    context.forEach((tok,i)=>{
+      const div = document.createElement("div");
+      div.className = "token " + (i < prompt.length ? "prompt" : "generated") + (i===currentIndex ? " current" : "");
+      if(i===currentIndex){
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.textContent = "Q를 만드는 위치";
+        div.appendChild(tag);
+      }
+      div.appendChild(document.createTextNode(tok));
+      els.lane.appendChild(div);
+    });
+
+    const next = document.createElement("div");
+    next.className = "token next";
+    next.textContent = nextToken;
+    els.lane.appendChild(next);
+
+    els.currentLabel.textContent = context[currentIndex];
+    els.prediction.textContent = nextToken;
+
+    if(step===0){
+      els.status.innerHTML = `<b>Prefill:</b> prompt ${prompt.length}개 token의 K/V가 cache되었습니다. 마지막 prompt token <b>“${context[currentIndex]}”</b> 위치의 출력으로 첫 token <b>“${nextToken}”</b>을 예측합니다.`;
+      els.predictionDetail.textContent = "첫 token은 prompt prefill의 마지막 위치 출력에서 바로 예측됩니다.";
+    }else if(step < demoGenerated.length){
+      els.status.innerHTML = `<b>Decode step ${step}:</b> 방금 생성한 token <b>“${context[currentIndex]}”</b>만 새로 처리합니다. 이 token의 K/V를 cache에 추가하고, 이 위치의 Q가 전체 cache를 참고해 <b>“${nextToken}”</b>을 예측합니다.`;
+      els.predictionDetail.textContent = `현재 KV Cache 크기: ${context.length} positions`;
+    }else{
+      els.status.innerHTML = `<b>완료:</b> 예시 문장을 모두 생성했습니다. 마지막 token까지의 K/V가 cache에 남아 있습니다.`;
+      els.predictionDetail.textContent = `최종 KV Cache 크기: ${context.length} positions`;
+    }
+
+    // cache
+    els.kCache.innerHTML = "";
+    els.vCache.innerHTML = "";
+    context.forEach((tok,i)=>{
+      const k = document.createElement("div");
+      k.className = "cache-row" + (i===currentIndex ? " current" : "");
+      k.innerHTML = `<span>K<sub>${i+1}</sub></span><small>${tok}</small>`;
+      els.kCache.appendChild(k);
+
+      const v = document.createElement("div");
+      v.className = "cache-row" + (i===currentIndex ? " current" : "");
+      v.innerHTML = `<span>V<sub>${i+1}</sub></span><small>${tok}</small>`;
+      els.vCache.appendChild(v);
+    });
+
+    // attention bars
+    const weights = attentionWeights(context,currentIndex);
+    const ranked = context.map((tok,i)=>({tok,i,w:weights[i]})).sort((a,b)=>b.w-a.w).slice(0,Math.min(8,context.length));
+    els.bars.innerHTML = "";
+    ranked.forEach(({tok,i,w})=>{
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      row.innerHTML = `
+        <div>${i+1}. ${tok}</div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${Math.max(4,w*100*2.3)}%"></div></div>
+        <div>${(w*100).toFixed(1)}%</div>`;
+      els.bars.appendChild(row);
+    });
+
+    els.prevBtn.disabled = step===0;
+    els.nextBtn.disabled = step>=demoGenerated.length;
+    els.nextBtn.textContent = step>=demoGenerated.length ? "생성 완료" : "다음 토큰 →";
+  }
+
+  function stopAuto(){
+    if(timer){ clearInterval(timer); timer=null; }
+    els.autoBtn.textContent = "▶ 자동 재생";
+  }
+
+  els.nextBtn.addEventListener("click",()=>{
+    if(step < demoGenerated.length){ step++; render(); }
+  });
+  els.prevBtn.addEventListener("click",()=>{
+    if(step>0){ step--; render(); }
+  });
+  els.resetBtn.addEventListener("click",()=>{
+    stopAuto(); step=0; render();
+  });
+  els.autoBtn.addEventListener("click",()=>{
+    if(timer){ stopAuto(); return; }
+    if(step>=demoGenerated.length) step=0;
+    els.autoBtn.textContent = "■ 정지";
+    timer = setInterval(()=>{
+      if(step>=demoGenerated.length){ stopAuto(); return; }
+      step++; render();
+    },1100);
+  });
+  els.promptInput.addEventListener("input",()=>{
+    stopAuto(); step=0; render();
+  });
+
+  render();
+</script>
+</body>
+</html>
